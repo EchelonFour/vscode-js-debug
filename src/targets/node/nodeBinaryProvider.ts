@@ -163,13 +163,14 @@ export class NodeBinaryProvider {
     env: EnvironmentVars,
     executable = 'node',
     explicitVersion?: number,
+    cwd?: string,
   ): Promise<NodeBinary> {
     if (!this.vscode) {
-      return this.resolveAndValidateInner(env, executable, explicitVersion);
+      return this.resolveAndValidateInner(env, executable, explicitVersion, cwd);
     }
 
     try {
-      return await this.resolveAndValidateInner(env, executable, explicitVersion);
+      return await this.resolveAndValidateInner(env, executable, explicitVersion, cwd);
     } catch (e) {
       if (!(e instanceof NodeBinaryOutOfDateError)) {
         throw e;
@@ -192,6 +193,7 @@ export class NodeBinaryProvider {
     env: EnvironmentVars,
     executable: string,
     explicitVersion: number | undefined,
+    cwd: string | undefined,
   ): Promise<NodeBinary> {
     const location = await this.resolveBinaryLocation(executable, env);
     this.logger.info(LogTag.RuntimeLaunch, 'Using binary at', { location, executable });
@@ -221,7 +223,7 @@ export class NodeBinaryProvider {
       }
 
       try {
-        const realBinary = await this.resolveAndValidateInner(env, 'node', undefined);
+        const realBinary = await this.resolveAndValidateInner(env, 'node', undefined, cwd);
         return new NodeBinary(location, realBinary.version);
       } catch (e) {
         // if we verified it's outdated, still throw the error. If it's not
@@ -246,7 +248,7 @@ export class NodeBinaryProvider {
     }
 
     // match the "12" in "v12.34.56"
-    const versionText = await this.getVersionText(location);
+    const versionText = await this.getVersionText(location, cwd);
     this.logger.info(LogTag.RuntimeLaunch, 'Discovered version', { version: versionText.trim() });
 
     const majorVersionMatch = /v([0-9]+)\.([0-9]+)\.([0-9]+)/.exec(versionText);
@@ -281,11 +283,12 @@ export class NodeBinaryProvider {
       : await findInPath(this.fs, executable, env.value);
   }
 
-  public async getVersionText(binary: string) {
-    let cwd: string | undefined = undefined;
-    const packageJson = await this.packageJson.getPath();
-    if (packageJson) {
-      cwd = dirname(packageJson);
+  public async getVersionText(binary: string, cwd: string | undefined) {
+    if (cwd === undefined) {
+      const packageJson = await this.packageJson.getPath();
+      if (packageJson) {
+        cwd = dirname(packageJson);
+      }
     }
     try {
       const { stdout } = await spawnAsync(binary, ['--version'], {
