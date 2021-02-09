@@ -282,9 +282,15 @@ export class NodeBinaryProvider {
   }
 
   public async getVersionText(binary: string) {
+    let cwd: string | undefined = undefined;
+    const packageJson = await this.packageJson.getPath();
+    if (packageJson) {
+      cwd = dirname(packageJson);
+    }
     try {
       const { stdout } = await spawnAsync(binary, ['--version'], {
         env: EnvironmentVars.processEnv().defined(),
+        cwd,
       });
       return stdout;
     } catch (e) {
